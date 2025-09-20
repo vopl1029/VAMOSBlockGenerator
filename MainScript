@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>VAMOS Connected Run Sheet</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f4f4f9; padding: 20px; }
+    .sheet {
+      background: #fff; padding: 20px; border-radius: 8px;
+      max-width: 900px; margin: 20px auto; page-break-after: always;
+    }
+    h2 { text-align: center; margin-bottom: 10px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid #444; padding: 6px; text-align: center; font-size: 14px; }
+    th { background: #eee; }
+    .print-btn {
+      display: none; margin: 20px auto; padding: 10px 20px;
+      background: #007bff; color: white; border: none; border-radius: 6px;
+      cursor: pointer;
+    }
+    .print-btn:hover { background: #0056b3; }
+    @media print {
+      .print-btn { display: none; }
+      body { background: none; padding: 0; }
+      .sheet { box-shadow: none; margin: 0; border-radius: 0; }
+    }
+  </style>
+</head>
+<body>
+
+  <button id="printBtn" class="print-btn" onclick="window.print()">
+    Download PDF
+  </button>
+  <div id="sheets"></div>
+
+  <script>
+    // ===== CONFIGURE HERE =====
+    const CONFIG = {
+      operatorCount: 50,
+      turnaround:    3,
+      deadheadTime:  10,
+      routes: [
+        { name: "1 Highway 55 via Sherwood", origin: "Caledonia", dest: "Highway55",     travel: 15 },
+        { name: "1 Caledonia via Sherwood",  origin: "Highway55",  dest: "Caledonia",     travel: 15 },
+        { name: "117 Trinity Commons Express", origin: "Caledonia", dest: "TrinityCommons", travel: 15 },
+        { name: "20A Trinity Commons",       origin: "Caledonia", dest: "TrinityCommons", travel: 11 },
+        { name: "20A Caledonia",             origin: "TrinityCommons", dest: "Caledonia", travel: 11 },
+        { name: "20B Sherwood",              origin: "Caledonia", dest: "Sherwood",      travel:  9 },
+        { name: "20B Caledonia",             origin: "Sherwood",  dest: "Caledonia",     travel:  9 }
+      ]
+    };
+    // ============================
+
+    function hhmmFromMinutes(mins) {
+      mins = ((mins % (24*60)) + 24*60) % (24*60);
+      const h = String(Math.floor(mins/60)).padStart(2,"0");
+      const m = String(mins%60).padStart(2,"0");
+      return `${h}:${m}`;
+    }
+
+    function getTorontoPlus6() {
+      // reliable HH:MM in Toronto
+      const hhmm = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "America/Toronto", hour12: false,
+        hour: "2-digit", minute: "2-digit"
+      }).format(new Date());
+      const [h, m] = hhmm.split(":").map(Number);
+      return h*60 + m + 6;
+    }
+
+    function pickRunCount() {
+      const params = new URLSearchParams(location.search);
+      let n = parseInt(params.get("runs"), 10);
+      if (isNaN(n) || n < 1) n = CONFIG.routes.length;
+      if (n > CONFIG.routes.length) n = CONFIG.routes.length;
+      return n;
+    }
+
+    function generateSheet(runCount) {
+      const opNum = Math.floor(Math.random() * CONFIG.operatorCount) + 1;
+      const opId  = "OP" + String(opNum).padStart(2,"0");
+
+      let t = getTorontoPlus6();
+      const rows = [];
+
+      // always start from Caledonia
+      const starters = CONFIG.routes.filter(r => r.origin === "Caledonia");
+      let current = starters[Math.floor(Math.random()*starters.length)];
+
+      for (let i=0; i<runCount; i++) {
+        // deadhead if needed
+        if (i>0 && current.origin !== rows[rows.length-1].dest) {
+          rows.push({
+            label:  `Deadhead to ${current.origin}`,
+            dep:    hhmmFromMinutes(t),
+            arr:    hhmmFromMinutes(t + CONFIG.deadheadTime),
+            driver: opId,
+            travel: `${CONFIG.deadheadTime}m`,
+            dest:   current.origin
+          });
+          t += CONFIG.deadheadTime + CONFIG.turnaround;
+        }
+
+        // actual run
+        rows.push({
+          label:  `${current.name} – Run ${i+1}`,
+          dep:    hhmmFromMinutes(t),
+          arr:    hhmmFromMinutes(t + current.travel),
+          driver: opId,
+          travel: `${current.travel}m`,
+          dest:   current.dest
+        });
+        t += current.travel + CONFIG.turnaround;
+
+        // pick next: prefer direct connections, else any
+        const conns = CONFIG.routes.filter(r => r.origin===current.dest);
+        current = conns.length
+          ? conns[Math.floor(Math.random()*conns.length)]
+          : CONFIG.routes[Math.floor(Math.random()*CONFIG.routes.length)];
+      }
+
+      // render
+      const sheet = document.createElement("div");
+      sheet.className = "sheet";
+      sheet.innerHTML = `
+        <h2>${opId} Run Sheet</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Route / Run</th>
+              <th>Pickup Time</th>
+              <th>Pickup Driver</th>
+              <th>Drop Off Time</th>
+              <th>Drop Off Driver</th>
+              <th>Comments</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map(r => `
+              <tr>
+                <td>${r.label}</td>
+                <td>${r.dep}</td>
+                <td>${r.driver}</td>
+                <td>${r.arr}</td>
+                <td>${r.driver}</td>
+                <td>${r.travel}</td>
+              </tr>`).join("")}
+          </tbody>
+        </table>`;
+      document.getElementById("sheets").appendChild(sheet);
+      document.getElementById("printBtn").style.display = "block";
+    }
+
+    window.addEventListener("DOMContentLoaded", () => {
+      const count = pickRunCount();
+      generateSheet(count);
+    });
+  </script>
+</body>
+</html>
