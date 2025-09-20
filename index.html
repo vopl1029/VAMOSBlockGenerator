@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Redirecting…</title>
+  <!-- Instant redirect, preserving any query string -->
+  <meta http-equiv="refresh" content="0; url=mainscript.html?%{QUERY_STRING}">
+  <script>
+    // Fallback for browsers that ignore meta-refresh
+    const qs = window.location.search;
+    window.location.replace("mainscript.html" + qs);
+  </script>
+</head>
+<body>
+  <p>Redirecting to your run sheet…</p>
+</body>
+</html>
